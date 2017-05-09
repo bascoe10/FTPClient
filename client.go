@@ -18,15 +18,24 @@ func (s *Server) address() string  {
 
 func (s *Server) connect() {
 	s.conn, _ = net.Dial("tcp", s.address())
+	s.getResponse()
+}
+
+func (s *Server) getResponse() {
 	s.message, _ = bufio.NewReader(s.conn).ReadString('\n')
+}
+
+func (s *Server) send(msg string) {
+	s.conn.Write([]byte(msg + "\r\n"))
 }
 
 
 func main() {
 	var host, port string;
+	reader := bufio.NewScanner(os.Stdin)
+
 	fmt.Println("Welcome to my FTP client.")
 	if len(os.Args) != 3 {
-		reader := bufio.NewScanner(os.Stdin)
 		fmt.Println("Enter Server Address")
 		fmt.Print("-> ")
 		reader.Scan()
@@ -44,7 +53,17 @@ func main() {
 	fmt.Println("Server has address " + srvr.address())
 	srvr.connect()
 	fmt.Print("Server message " + srvr.message)
-	//conn, _ := net.Dial("tcp", host + ":" + port)
-	//message, _ := bufio.NewReader(conn).ReadString('\n')
-	//fmt.Print("Received from server: " + message)
+
+	for{
+		fmt.Print("command-with-args> ")
+		reader.Scan()
+		srvr.send(reader.Text())
+		srvr.getResponse()
+		fmt.Print("Response: " + srvr.message)
+	}
 }
+
+//func processCommand(cli string){
+//	_split := strings.SplitN(cli, " ", 2)
+//	command, args := _split[0], _split[1]
+//}
