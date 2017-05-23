@@ -10,9 +10,10 @@ import (
 )
 
 type Server struct {
-	host, port, message, d_message, data_address string
-	ctrl_conn, data_conn net.Conn
-	data_socket net.Listener
+	host, port, message, d_message, data_host, data_port string
+	ctrl_conn, data_conn                                 net.Conn
+	data_socket                                          net.Listener
+	passive                                              bool
 }
 
 func (s *Server) address() string  {
@@ -25,49 +26,52 @@ func (s *Server) connect() {
 }
 
 func (s *Server) getResponse() {
-	s.message, _ = bufio.NewReader(s.ctrl_conn).ReadString('\n')
-	//if s.data_conn != nil {
-	//	s.d_message,_ = bufio.NewReader(s.data_conn).ReadString('\n')
-	//	s.data_conn.Close()
-	//	s.data_conn = nil
-	//}
+	buf := make([]byte, 1024)
+	n, _ := s.ctrl_conn.Read(buf)
+	s.message = string(buf[:n])
 }
 
 func (s *Server) send(msg string) {
 	s.ctrl_conn.Write([]byte(msg + "\r\n"))
+	s.getResponse()
 }
 
 func (s *Server) setDataConnPRT(host, upper, lower string) {
 	_upper, _ := strconv.Atoi(upper)
 	_lower, _ := strconv.Atoi(lower)
 
-	ctrl_port := (_upper << 8) | _lower
+	s.data_port = strconv.Itoa((_upper << 8) | _lower)
 	strings.Replace(host, ",", ".",3)
-	fmt.Println(host)
-	fmt.Println(strconv.Itoa(ctrl_port))
-	s.data_address = host + ":" + strconv.Itoa(ctrl_port)
-	fmt.Println(s.data_address)
-	fmt.Println("-----------------")
+	s.data_host = host
+	if s.passive {
+		s.data_conn, _ = net.Dial("tcp", ":"+s.data_port)
+	} else {
+		s.data_socket, _ = net.Listen("tcp", ":"+srvr.data_port)
+	}
 }
 
-//func (s *Server) getDataResponse(){
-//
-//}
-
 var (
-	command2Func = map[string]func(Server, string){
+	command2Func = map[string]func(string){
 		"USER": USER,
 		"PASS": PASS,
 		"QUIT": QUIT,
 		"PWD" : PWD,
 		"PORT": PORT,
 		"LIST": LIST,
+		"PASV": PASV,
+		//"RETR": RETR,
+		//"EPSV": EPSV,
+		//"EPRT": EPRT,
+		//"CDUP": CDUP,
+		//"CWD": CWD,
+		"HELP": HELP,
+		//"NOOP": NOOP,
 	}
 	srvr Server
 )
 
 func main() {
-	var host, port string;
+	var host, port string
 	reader := bufio.NewScanner(os.Stdin)
 
 	fmt.Println("Welcome to my FTP client.")
@@ -94,12 +98,7 @@ func main() {
 		fmt.Print("command-with-args> ")
 		reader.Scan()
 		processCommand(reader.Text())
-		srvr.getResponse()
 		fmt.Print("Response: " + srvr.message)
-		if srvr.d_message != "" {
-			fmt.Print(srvr.d_message)
-			srvr.d_message = ""
-		}
 	}
 }
 
@@ -110,26 +109,34 @@ func processCommand(cli string){
 	if len(_split) > 1{
 		args = _split[1]
 	}
-	command2Func[command](srvr, args)
+	_func, ok := command2Func[command]
+	if !ok {
+		fmt.Println("Sorry command is not currently supported")
+		return
+	}
+
+	_func(args)
 }
 
-func USER(s Server, args string){
+func USER(args string) {
 	srvr.send("USER " + args)
 }
 
-func PASS(s Server, args string){
+func PASS(args string) {
 	srvr.send("PASS " + args)
 }
 
-func QUIT(s Server, args string){
+func QUIT(args string) {
 	srvr.send("QUIT " + args)
+	os.Exit(0)
 }
 
-func PWD(s Server, args string){
+func PWD(args string) {
 	srvr.send("PWD " + args)
 }
 
-func PORT(s Server, args string){
+func PORT(args string) {
+	srvr.passive = false
 	_host_upper_lower := strings.Split(args, ",")
 	host, upper, lower := _host_upper_lower[:4], _host_upper_lower[4], _host_upper_lower[5]
 	srvr.setDataConnPRT(strings.Join(host, ","), upper, lower)
@@ -137,9 +144,27 @@ func PORT(s Server, args string){
 	return
 }
 
-func LIST(s Server, args string){
-	ln, _ := net.Listen("tcp", ":2020")
+func LIST(args string) {
 	srvr.send("LIST " + args)
-	conn, _ := ln.Accept()
-	fmt.Println(bufio.NewReader(conn).ReadString('\n'))
+	if !srvr.passive {
+		srvr.data_conn, _ = srvr.data_socket.Accept()
+	}
+	fmt.Print("Response: " + srvr.message)
+	fmt.Println(bufio.NewReader(srvr.data_conn).ReadString('\n'))
+	srvr.getResponse()
+}
+
+func PASV(args string) {
+	srvr.passive = true
+	srvr.send("PASV " + args)
+	_upper := strings.Index(srvr.message, "(") + 1
+	_lower := strings.Index(srvr.message, ")")
+	address := srvr.message[_upper:_lower]
+	_address := strings.Split(address, ",")
+	host, upper, lower := _address[0], _address[1], _address[2]
+	srvr.setDataConnPRT(string(host), string(upper), string(lower))
+}
+
+func HELP(args string) {
+	srvr.send("HELP " + args)
 }
