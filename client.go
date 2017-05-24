@@ -185,7 +185,12 @@ func RETR(args string) {
 		srvr.data_conn, _ = srvr.data_socket.Accept()
 	}
 	fmt.Print("Response: " + srvr.message)
-	buf := make([]byte, 1024)
+	_upper := strings.Index(srvr.message, "(") + 1
+	_lower := strings.Index(srvr.message, " bytes)")
+	_size, _ := strconv.Atoi(srvr.message[_upper:_lower])
+	buf := make([]byte, _size)
 	n, _ := srvr.data_conn.Read(buf)
-	fmt.Println(string(buf[:n]))
+	file, _ := os.Create(args)
+	file.Write(buf[:n])
+	srvr.getResponse()
 }
