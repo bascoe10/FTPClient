@@ -65,7 +65,7 @@ var (
 		"CDUP": CDUP,
 		"CWD":  CWD,
 		"HELP": HELP,
-		//"NOOP": NOOP,
+		"NOOP": NOOP,
 	}
 	srvr Server
 )
@@ -177,6 +177,10 @@ func CDUP(args string) {
 
 func CWD(args string) {
 	srvr.send("CWD " + args)
+}
+
+func NOOP(args string) {
+	srvr.send("NOOP " + args)
 }
 
 func RETR(args string) {
