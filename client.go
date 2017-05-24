@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"bufio"
-	"os"
+	"fmt"
 	"net"
-	"strings"
+	"os"
 	"strconv"
+	"strings"
 )
 
 type Server struct {
@@ -16,7 +16,7 @@ type Server struct {
 	passive                                              bool
 }
 
-func (s *Server) address() string  {
+func (s *Server) address() string {
 	return s.host + ":" + s.port
 }
 
@@ -41,7 +41,7 @@ func (s *Server) setDataConnPRT(host, upper, lower string) {
 	_lower, _ := strconv.Atoi(lower)
 
 	s.data_port = strconv.Itoa((_upper << 8) | _lower)
-	strings.Replace(host, ",", ".",3)
+	strings.Replace(host, ",", ".", 3)
 	s.data_host = host
 	if s.passive {
 		s.data_conn, _ = net.Dial("tcp", ":"+s.data_port)
@@ -55,15 +55,15 @@ var (
 		"USER": USER,
 		"PASS": PASS,
 		"QUIT": QUIT,
-		"PWD" : PWD,
+		"PWD":  PWD,
 		"PORT": PORT,
 		"LIST": LIST,
 		"PASV": PASV,
-		//"RETR": RETR,
+		"RETR": RETR,
 		//"EPSV": EPSV,
 		//"EPRT": EPRT,
-		//"CDUP": CDUP,
-		//"CWD": CWD,
+		"CDUP": CDUP,
+		"CWD":  CWD,
 		"HELP": HELP,
 		//"NOOP": NOOP,
 	}
@@ -84,7 +84,7 @@ func main() {
 		fmt.Print("-> ")
 		reader.Scan()
 		port = reader.Text()
-	}else {
+	} else {
 		host = os.Args[1]
 		port = os.Args[2]
 	}
@@ -94,7 +94,7 @@ func main() {
 	srvr.connect()
 	fmt.Print("Server message " + srvr.message)
 
-	for{
+	for {
 		fmt.Print("command-with-args> ")
 		reader.Scan()
 		processCommand(reader.Text())
@@ -102,11 +102,11 @@ func main() {
 	}
 }
 
-func processCommand(cli string){
+func processCommand(cli string) {
 	var command, args string
 	_split := strings.SplitN(cli, " ", 2)
 	command = _split[0]
-	if len(_split) > 1{
+	if len(_split) > 1 {
 		args = _split[1]
 	}
 	_func, ok := command2Func[command]
@@ -150,7 +150,9 @@ func LIST(args string) {
 		srvr.data_conn, _ = srvr.data_socket.Accept()
 	}
 	fmt.Print("Response: " + srvr.message)
-	fmt.Println(bufio.NewReader(srvr.data_conn).ReadString('\n'))
+	buf := make([]byte, 1024)
+	n, _ := srvr.data_conn.Read(buf)
+	fmt.Println(string(buf[:n]))
 	srvr.getResponse()
 }
 
@@ -167,4 +169,23 @@ func PASV(args string) {
 
 func HELP(args string) {
 	srvr.send("HELP " + args)
+}
+
+func CDUP(args string) {
+	srvr.send("CDUP " + args)
+}
+
+func CWD(args string) {
+	srvr.send("CWD " + args)
+}
+
+func RETR(args string) {
+	srvr.send("RETR " + args)
+	if !srvr.passive {
+		srvr.data_conn, _ = srvr.data_socket.Accept()
+	}
+	fmt.Print("Response: " + srvr.message)
+	buf := make([]byte, 1024)
+	n, _ := srvr.data_conn.Read(buf)
+	fmt.Println(string(buf[:n]))
 }
