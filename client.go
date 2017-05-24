@@ -50,6 +50,15 @@ func (s *Server) setDataConnPRT(host, upper, lower string) {
 	}
 }
 
+func (s *Server) setDataConnPRTE(host string) {
+	s.data_host = host
+	if s.passive {
+		s.data_conn, _ = net.Dial("tcp", ":"+s.data_port)
+	} else {
+		s.data_socket, _ = net.Listen("tcp", ":"+s.data_port)
+	}
+}
+
 var (
 	command2Func = map[string]func(string){
 		"USER": USER,
@@ -60,7 +69,7 @@ var (
 		"LIST": LIST,
 		"PASV": PASV,
 		"RETR": RETR,
-		//"EPSV": EPSV,
+		"EPSV": EPSV,
 		//"EPRT": EPRT,
 		"CDUP": CDUP,
 		"CWD":  CWD,
@@ -197,4 +206,18 @@ func RETR(args string) {
 	file, _ := os.Create(args)
 	file.Write(buf[:n])
 	srvr.getResponse()
+}
+
+func EPSV(args string) {
+	srvr.passive = true
+	srvr.send("EPSV " + args)
+	fmt.Println(srvr.message)
+	_upper := strings.Index(srvr.message, "(|") + 2
+	_lower := strings.Index(srvr.message, "|)")
+	_address := srvr.message[_upper:_lower]
+	fmt.Println(_address)
+	_prtcl_host_port := strings.Split(_address, "|")
+	srvr.data_port = _prtcl_host_port[2]
+	fmt.Println(srvr.data_port)
+	srvr.setDataConnPRTE(_prtcl_host_port[1])
 }
