@@ -61,10 +61,15 @@ func (s *Server) setDataConnPRT(host, upper, lower string) {
 	}
 }
 
-func (s *Server) setDataConnPRTE(host string) {
-	s.data_host = host
+func (s *Server) setDataConnPRTE() {
 	if s.passive {
-		s.data_conn, _ = net.Dial("tcp", ":"+s.data_port)
+		var _host string
+		if s.data_host == "" || s.data_host == "127.0.0.1" || s.data_host == s.host {
+			_host = ""
+		} else {
+			_host = s.data_host
+		}
+		s.data_conn, _ = net.Dial("tcp", _host+":"+s.data_port)
 	} else {
 		s.data_socket, _ = net.Listen("tcp", ":"+s.data_port)
 	}
@@ -103,15 +108,6 @@ func PWD(args string) {
 	srvr.send("PWD")
 }
 
-func PORT(args string) {
-	srvr.passive = false
-	_host_upper_lower := strings.Split(args, ",")
-	host, upper, lower := _host_upper_lower[:4], _host_upper_lower[4], _host_upper_lower[5]
-	srvr.setDataConnPRT(strings.Join(host, ","), upper, lower)
-	srvr.send("PORT " + args)
-	return
-}
-
 func LIST(args string) {
 	var buf bytes.Buffer
 	srvr.send("LIST " + args)
@@ -119,22 +115,11 @@ func LIST(args string) {
 		srvr.data_conn, _ = srvr.data_socket.Accept()
 	}
 	defer srvr.data_conn.Close()
-	fmt.Print(srvr.message)
+	fmt.Println(srvr.message)
 	io.Copy(&buf, srvr.data_conn)
 	_bytes_read := len(buf.String())
 	fmt.Println(buf.String()[:_bytes_read-2])
 	srvr.getResponse()
-}
-
-func PASV(args string) {
-	srvr.passive = true
-	srvr.send("PASV " + args)
-	_upper := strings.Index(srvr.message, "(") + 1
-	_lower := strings.Index(srvr.message, ")")
-	address := srvr.message[_upper:_lower]
-	_address := strings.Split(address, ",")
-	host, upper, lower := _address[0], _address[1], _address[2]
-	srvr.setDataConnPRT(string(host), string(upper), string(lower))
 }
 
 func HELP(args string) {
@@ -169,6 +154,26 @@ func RETR(args string) {
 	srvr.getResponse()
 }
 
+func PORT(args string) {
+	srvr.passive = false
+	_host_upper_lower := strings.Split(args, ",")
+	host, upper, lower := _host_upper_lower[:4], _host_upper_lower[4], _host_upper_lower[5]
+	srvr.setDataConnPRT(strings.Join(host, ","), upper, lower)
+	srvr.send("PORT " + args)
+	return
+}
+
+func PASV(args string) {
+	srvr.passive = true
+	srvr.send("PASV " + args)
+	_upper := strings.Index(srvr.message, "(") + 1
+	_lower := strings.Index(srvr.message, ")")
+	address := srvr.message[_upper:_lower]
+	_address := strings.Split(address, ",")
+	host, upper, lower := _address[0], _address[1], _address[2]
+	srvr.setDataConnPRT(string(host), string(upper), string(lower))
+}
+
 func EPSV(args string) {
 	srvr.passive = true
 	srvr.send("EPSV")
@@ -176,8 +181,20 @@ func EPSV(args string) {
 	_lower := strings.Index(srvr.message, "|)")
 	_address := srvr.message[_upper:_lower]
 	_prtcl_host_port := strings.Split(_address, "|")
+	srvr.data_host = _prtcl_host_port[1]
 	srvr.data_port = _prtcl_host_port[2]
-	srvr.setDataConnPRTE(_prtcl_host_port[1])
+	srvr.setDataConnPRTE()
+}
+
+func EPRT(args string) {
+	srvr.passive = false
+	srvr.send("EPRT " + args)
+	_prtcl_host_port := strings.Split(args, "|")
+	srvr.data_host = _prtcl_host_port[2]
+	srvr.data_port = _prtcl_host_port[3]
+	fmt.Println(srvr.data_host)
+	fmt.Println(srvr.data_port)
+	srvr.setDataConnPRTE()
 }
 
 type FTPError struct {
@@ -199,7 +216,7 @@ var (
 		"PASV": PASV,
 		"RETR": RETR,
 		"EPSV": EPSV,
-		//"EPRT": EPRT,
+		"EPRT": EPRT,
 		"CDUP": CDUP,
 		"CWD":  CWD,
 		"HELP": HELP,
