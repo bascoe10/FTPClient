@@ -61,7 +61,15 @@ func (s *Server) setDataConnPRT(host, upper, lower string) {
 	}
 }
 
-func (s *Server) setDataConnPRTE() {
+func (s *Server) setDataConnPRTE(protocol string) error {
+	var _prtcl string
+	if protocol == "" || protocol == "1" {
+		_prtcl = "tcp"
+	} else if protocol == "2" {
+		_prtcl = "tcp6"
+	} else {
+		return FTPError{level: "warning", what: "Unknown protocol"}
+	}
 	if s.passive {
 		var _host string
 		if s.data_host == "" || s.data_host == "127.0.0.1" || s.data_host == s.host {
@@ -69,13 +77,15 @@ func (s *Server) setDataConnPRTE() {
 		} else {
 			_host = s.data_host
 		}
-		s.data_conn, _ = net.Dial("tcp", _host+":"+s.data_port)
+		s.data_conn, _ = net.Dial(_prtcl, _host+":"+s.data_port)
 	} else {
-		s.data_socket, _ = net.Listen("tcp", ":"+s.data_port)
+		s.data_socket, _ = net.Listen(_prtcl, ":"+s.data_port)
 	}
+
+	return nil
 }
 
-func processCommand(cli string) {
+func processCommand(cli string) error {
 	var command, args string
 	_split := strings.SplitN(cli, " ", 2)
 	command = _split[0]
@@ -84,11 +94,10 @@ func processCommand(cli string) {
 	}
 	_func, ok := command2Func[command]
 	if !ok {
-		fmt.Println("Sorry command is not currently supported")
-		return
+		return FTPError{level: "error", what: "Command not currently supported"}
 	}
-
 	_func(args)
+	return nil
 }
 
 func USER(args string) {
@@ -183,7 +192,7 @@ func EPSV(args string) {
 	_prtcl_host_port := strings.Split(_address, "|")
 	srvr.data_host = _prtcl_host_port[1]
 	srvr.data_port = _prtcl_host_port[2]
-	srvr.setDataConnPRTE()
+	srvr.setDataConnPRTE(_prtcl_host_port[0])
 }
 
 func EPRT(args string) {
@@ -192,9 +201,9 @@ func EPRT(args string) {
 	_prtcl_host_port := strings.Split(args, "|")
 	srvr.data_host = _prtcl_host_port[2]
 	srvr.data_port = _prtcl_host_port[3]
-	fmt.Println(srvr.data_host)
-	fmt.Println(srvr.data_port)
-	srvr.setDataConnPRTE()
+	if err := srvr.setDataConnPRTE(_prtcl_host_port[1]); err != nil {
+		fmt.Println(err)
+	}
 }
 
 type FTPError struct {
@@ -255,7 +264,10 @@ func main() {
 	for {
 		fmt.Print("command-with-args> ")
 		reader.Scan()
-		processCommand(reader.Text())
-		fmt.Println(srvr.message)
+		if err := processCommand(reader.Text()); err == nil {
+			fmt.Println(srvr.message)
+		} else {
+			fmt.Println(err)
+		}
 	}
 }
